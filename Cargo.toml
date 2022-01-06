@@ -2,12 +2,20 @@
 name = "macro-vis"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+rust-version = "1.56"
+description = "Attribute for defining `macro_rules!` macros with proper visibility and scoping"
+repository = "https://github.com/Kestrer/macro-vis"
+license = "MIT"
+keywords = ["macro_rules", "decl_macro", "well-scoped", "namespaced", "visibility"]
+categories = ["rust-patterns"]
 
 [dependencies]
 proc-macro2 = "1.0.36"
 quote = "1.0.14"
 
 [lib]
+path = "src/lib.rs"
 proc-macro = true
+
+[workspace]
+members = ["test-crate"]
