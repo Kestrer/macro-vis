@@ -101,6 +101,12 @@ as well as it working properly with inlined re-exports.
 The drawback is that it doesn't work on stable,
 and so has a greater risk of breaking in future.
 
+## MSRV
+
+This crate's minimum supported Rust version is 1.53,
+the first version to stabilize `non_ascii_idents`.
+It is currently considered a breaking change to increase this.
+
 ## Credit
 
 Most of the ideas in this crate were discovered and shown to me by

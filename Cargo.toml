@@ -1,8 +1,8 @@
 [package]
 name = "macro-vis"
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.56"
+edition = "2018"
+rust-version = "1.53"
 description = "Attribute for defining `macro_rules!` macros with proper visibility and scoping"
 repository = "https://github.com/Kestrer/macro-vis"
 license = "MIT"
