@@ -113,7 +113,7 @@ Most of the ideas in this crate were discovered and shown to me by
 [Daniel Henry-Mantilla](https://github.com/danielhenrymantilla),
 so much of the credit goes to them.
 
-[attribute doc]: https://docs.rs/macro-vis/latest/macro_vis/macro.macro_vis.html
+[attribute doc]: https://docs.rs/macro-vis/latest/macro_vis/attr.macro_vis.html
 [declarative macros 2.0]: https://github.com/rust-lang/rust/issues/39412
 
 License: MIT
