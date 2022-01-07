@@ -286,7 +286,7 @@ fn parse_vis(vis: TokenStream) -> Result<Vis, TokenStream> {
     let pub_token = match vis.next() {
         Some(TokenTree::Ident(pub_token)) if pub_token == "pub" => pub_token,
         Some(token) => {
-            return Err(quote_spanned!(token.span()=> compile_error!("expected visibility")))
+            return Err(error(token.span(), "expected visibility"));
         }
         None => {
             return Ok(Vis::Local {
@@ -299,13 +299,13 @@ fn parse_vis(vis: TokenStream) -> Result<Vis, TokenStream> {
     let scope = match vis.next() {
         Some(TokenTree::Group(scope)) if scope.delimiter() == Delimiter::Parenthesis => scope,
         Some(token) => {
-            return Err(quote_spanned!(token.span()=> compile_error!("expected parenthesis")))
+            return Err(error(token.span(), "expected parenthesis"));
         }
         None => return Ok(Vis::Public { pub_token }),
     };
 
     if let Some(trailing) = vis.next() {
-        return Err(quote_spanned!(trailing.span()=> compile_error!("trailing tokens")));
+        return Err(error(trailing.span(), "trailing tokens"));
     }
 
     Ok(Vis::Local {
@@ -322,14 +322,10 @@ fn parse_macro(item: TokenStream) -> Result<Macro, TokenStream> {
     let macro_rules = loop {
         match item.next() {
             Some(TokenTree::Punct(punct)) if punct.as_char() == '#' => {
-                let next = item
-                    .next()
-                    .ok_or_else(|| quote!(compile_error!("unexpected EOF")))?;
+                let next = item.next().expect("unexpected EOF in attribute");
                 if !matches!(&next, TokenTree::Group(group) if group.delimiter() == Delimiter::Bracket)
                 {
-                    return Err(
-                        quote_spanned!(next.span()=> compile_error!("expected square brackets")),
-                    );
+                    unreachable!("attribute without square brackets");
                 }
                 attrs.extend([TokenTree::Punct(punct), next]);
             }
@@ -337,9 +333,7 @@ fn parse_macro(item: TokenStream) -> Result<Macro, TokenStream> {
                 break macro_rules;
             }
             token => {
-                return Err(
-                    quote_spanned!(opt_span(&token)=> compile_error!("expected macro_rules! macro")),
-                );
+                return Err(error(opt_span(&token), "expected macro_rules! macro"));
             }
         }
     };
@@ -347,55 +341,52 @@ fn parse_macro(item: TokenStream) -> Result<Macro, TokenStream> {
     let bang = match item.next() {
         Some(TokenTree::Punct(p)) if p.as_char() == '!' => p,
         token => {
-            return Err(
-                quote_spanned!(opt_span(&token)=> compile_error!("expected exclamation mark")),
-            );
+            return Err(error(opt_span(&token), "expected exclamation mark"));
         }
     };
 
     let name = match item.next() {
         Some(TokenTree::Ident(ident)) => ident,
         token => {
-            return Err(quote_spanned!(opt_span(&token)=> compile_error!("expected identifier")));
+            return Err(error(opt_span(&token), "expected identifier"));
         }
     };
 
     let arms = match item.next() {
         Some(TokenTree::Group(group)) => group,
         token => {
-            return Err(quote_spanned!(opt_span(&token)=> compile_error!("expected macro arms")));
+            return Err(error(opt_span(&token), "expected macro arms"));
         }
     };
 
     let mut rule_tokens = arms.stream().into_iter();
     let mut rules = Vec::new();
 
+    // The macro arms need proper validation because the following is actually accepted by rustc:
+    // #[macro_vis]
+    // macro_rules! some_macro { invalid tokens }
     loop {
         let matcher = match rule_tokens.next() {
             Some(TokenTree::Group(group)) => group,
             Some(token) => {
-                return Err(quote_spanned!(token.span()=> compile_error!("expected macro matcher")))
+                return Err(error(token.span(), "expected macro matcher"));
             }
             None if rules.is_empty() => {
-                return Err(quote_spanned!(arms.span()=> compile_error!("expected macro rules")))
+                return Err(error(arms.span(), "expected macro rules"));
             }
             None => break,
         };
         let equals = match rule_tokens.next() {
             Some(TokenTree::Punct(equals)) if equals.as_char() == '=' => equals,
-            token => return Err(quote_spanned!(opt_span(&token)=> compile_error!("expected =>"))),
+            token => return Err(error(opt_span(&token), "expected =>")),
         };
         let greater_than = match rule_tokens.next() {
             Some(TokenTree::Punct(greater_than)) if greater_than.as_char() == '>' => greater_than,
-            token => return Err(quote_spanned!(opt_span(&token)=> compile_error!("expected >"))),
+            _ => return Err(error(equals.span(), "expected =>")),
         };
         let transcriber = match rule_tokens.next() {
             Some(TokenTree::Group(group)) => group,
-            token => {
-                return Err(
-                    quote_spanned!(opt_span(&token)=> compile_error!("expected macro transcriber")),
-                )
-            }
+            token => return Err(error(opt_span(&token), "expected macro transcriber")),
         };
         let mut rule = MacroRule {
             matcher,
@@ -414,7 +405,7 @@ fn parse_macro(item: TokenStream) -> Result<Macro, TokenStream> {
                 break;
             }
             Some(token) => {
-                return Err(quote_spanned!(token.span()=> compile_error!("expected semicolon")))
+                return Err(error(token.span(), "expected semicolon"));
             }
         }
     }
@@ -422,18 +413,14 @@ fn parse_macro(item: TokenStream) -> Result<Macro, TokenStream> {
     let semi = if arms.delimiter() != Delimiter::Brace {
         Some(match item.next() {
             Some(TokenTree::Punct(semi)) if semi.as_char() == ';' => semi,
-            token => {
-                return Err(
-                    quote_spanned!(opt_span(&token)=> compile_error!("expected semicolon")),
-                );
-            }
+            _ => unreachable!("no semicolon after () or []-delimited macro"),
         })
     } else {
         None
     };
 
-    if let Some(token) = item.next() {
-        return Err(quote_spanned!(token.span()=> compile_error!("trailing tokens")));
+    if item.next().is_some() {
+        unreachable!("trailing tokens after macro_rules! macro");
     }
 
     Ok(Macro {
@@ -476,6 +463,10 @@ fn macro_2_0_arms(rules: &[MacroRule]) -> TokenStream {
         .collect()
 }
 
+fn error(span: Span, msg: &str) -> TokenStream {
+    quote_spanned!(span=> ::core::compile_error!(#msg))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{parse_macro, parse_vis, Macro, Vis};
@@ -513,7 +504,7 @@ mod tests {
             (($($input:tt)*) -> $e:literal) => {
                 assert_eq!(
                     parse_vis(quote!($($input)*)).unwrap_err().to_string(),
-                    quote!(compile_error!($e)).to_string(),
+                    quote!(::core::compile_error!($e)).to_string(),
                 );
             };
         }
@@ -568,25 +559,19 @@ mod tests {
             (($($input:tt)*) -> $e:literal) => {
                 assert_eq!(
                     parse_macro(quote!($($input)*)).unwrap_err().to_string(),
-                    quote!(compile_error!($e)).to_string(),
+                    quote!(::core::compile_error!($e)).to_string(),
                 );
             }
         }
         assert_err!(() -> "expected macro_rules! macro");
         assert_err!((const _: () = {};) -> "expected macro_rules! macro");
-        assert_err!((#) -> "unexpected EOF");
-        assert_err!((#{}) -> "expected square brackets");
         assert_err!((macro_rules x {}) -> "expected exclamation mark");
         assert_err!((macro_rules! { () => {} }) -> "expected identifier");
         assert_err!((macro_rules! foo) -> "expected macro arms");
-        assert_err!((macro_rules! foo ( () => {} )) -> "expected semicolon");
-        assert_err!((macro_rules! foo [ () => {} ]) -> "expected semicolon");
-        assert_err!((macro_rules! foo ( () => {} ); trailing) -> "trailing tokens");
-        assert_err!((macro_rules! foo { () => {} };) -> "trailing tokens");
         assert_err!((macro_rules! foo { }) -> "expected macro rules");
         assert_err!((macro_rules! foo { # }) -> "expected macro matcher");
         assert_err!((macro_rules! foo { () }) -> "expected =>");
-        assert_err!((macro_rules! foo { () = }) -> "expected >");
+        assert_err!((macro_rules! foo { () = }) -> "expected =>");
         assert_err!((macro_rules! foo { () => }) -> "expected macro transcriber");
         assert_err!((macro_rules! foo { () => {} () => {} }) -> "expected semicolon");
     }
