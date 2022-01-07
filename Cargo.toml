@@ -1,6 +1,6 @@
 [package]
 name = "macro-vis"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 rust-version = "1.53"
 description = "Attribute for defining `macro_rules!` macros with proper visibility and scoping"
